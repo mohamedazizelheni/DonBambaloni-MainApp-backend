@@ -1,0 +1,66 @@
+import express from 'express';
+import { body, param, query } from 'express-validator';
+import {
+  getAllUsers,
+  getUserProfile,
+  updateUserProfile,
+  deleteUser,
+} from '../controllers/userController.js';
+import { authenticateToken } from '../middlewares/authenticate.js';
+import { authorizeRole } from '../middlewares/authorize.js';
+
+const router = express.Router();
+
+/**
+ * @route   GET /api/users
+ * @desc    Get all users (Admin only)
+ * @access  Private
+ */
+router.get(
+  '/',
+  authenticateToken,
+  authorizeRole('Admin'),
+  [
+    query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
+    query('limit').optional().isInt({ min: 1 }).withMessage('Limit must be a positive integer'),
+  ],
+  getAllUsers
+);
+
+/**
+ * @route   GET /api/users/profile
+ * @desc    Get own profile
+ * @access  Private
+ */
+router.get('/profile', authenticateToken, getUserProfile);
+
+/**
+ * @route   PUT /api/users/profile
+ * @desc    Update own profile
+ * @access  Private
+ */
+router.put(
+  '/profile',
+  authenticateToken,
+  [
+    body('email').optional().isEmail().withMessage('Valid email is required').normalizeEmail(),
+    body('username').optional().trim().notEmpty().withMessage('Username cannot be empty'),
+    // Add additional validations as needed
+  ],
+  updateUserProfile
+);
+
+/**
+ * @route   DELETE /api/users/:userId
+ * @desc    Delete a user (Admin only)
+ * @access  Private
+ */
+router.delete(
+  '/:userId',
+  authenticateToken,
+  authorizeRole('Admin'),
+  [param('userId').isMongoId().withMessage('Invalid user ID')],
+  deleteUser
+);
+
+export default router;

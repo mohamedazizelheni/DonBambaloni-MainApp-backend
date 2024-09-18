@@ -1,0 +1,30 @@
+import mongoose from 'mongoose';
+import { ShiftType } from '../utils/enums.js';
+
+
+const ShopSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true, trim: true, index: true },
+    address: { type: String, required: true },
+    operatingShifts: [{ type: String, enum: Object.values(ShiftType), required: true }],
+    teams: {
+      type: Map,
+      of: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    },
+    image: { type: String },
+  },
+  { timestamps: true }
+);
+
+// Index for text search on name and address
+ShopSchema.index({ name: 'text', address: 'text' });
+ShopSchema.pre('save', function (next) {
+    const validShiftTypes = Object.values(ShiftType);
+    for (let key of this.teams.keys()) {
+      if (!validShiftTypes.includes(key)) {
+        return next(new Error(`Invalid shift type: ${key}`));
+      }
+    }
+    next();
+  });
+export default mongoose.model('Shop', ShopSchema);
