@@ -28,10 +28,7 @@ app.use(cookieParser()); // Parse cookies
 app.use(morgan('dev'));
 
 // Database connection
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-});
+mongoose.connect(process.env.MONGODB_URI);
 mongoose.connection.on('connected', () => {
   console.log('Mongoose connected to MongoDB');
 });
@@ -51,28 +48,7 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(err.status || 500).json({ message: err.message || 'Internal Server Error' });
 });
-async function createInitialAdmin() {
-  try {
-    const existingAdmin = await User.findOne({ role: Role.ADMIN });
 
-    if (!existingAdmin) {
-      const admin = new User({
-        username: 'admin',
-        email: process.env.ADMIN_EMAIL,
-        password: process.env.ADMIN_PASSWORD,
-        role: Role.ADMIN,
-        salary: 0, // Set appropriate salary if needed
-      });
-
-      await admin.save();
-      console.log('Initial admin user created.');
-    } else {
-      console.log('Admin user already exists.');
-    }
-  } catch (error) {
-    console.error('Error creating initial admin user:', error);
-  }
-}
 // Start the server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, async () => {
