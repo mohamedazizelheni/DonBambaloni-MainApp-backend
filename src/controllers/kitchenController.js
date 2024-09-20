@@ -131,23 +131,30 @@ export const deleteKitchen = async (req, res, next) => {
 };
 
 // Assign a user to a kitchen shift (Admin only)
-export const assignUserToKitchenShift = async (req, res, next) => {
+export const assignUsersToKitchenShift = async (req, res, next) => {
   try {
     const { kitchenId } = req.params;
-    const { userId, shiftType } = req.body;
+    const { userIds, shiftType } = req.body;
+
+    // Validate request data
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
 
     // Validate shift type
     if (!Object.values(ShiftType).includes(shiftType)) {
       return res.status(400).json({ message: 'Invalid shift type' });
     }
 
-    const [user, kitchen] = await Promise.all([
-      User.findById(userId).exec(),
-      Kitchen.findById(kitchenId).exec(),
-    ]);
+    // Ensure userIds is an array
+    if (!Array.isArray(userIds)) {
+      return res.status(400).json({ message: 'userIds must be an array' });
+    }
 
-    if (!user || !kitchen) {
-      return res.status(404).json({ message: 'User or Kitchen not found' });
+    const kitchen = await Kitchen.findById(kitchenId).exec();
+    if (!kitchen) {
+      return res.status(404).json({ message: 'Kitchen not found' });
     }
 
     // Start a session for transaction
@@ -155,22 +162,47 @@ export const assignUserToKitchenShift = async (req, res, next) => {
     session.startTransaction();
 
     try {
-      // Assign user to kitchen
-      user.kitchenId = kitchen._id;
-      await user.save({ session });
+      // Get current users assigned to this shift
+      const currentUserIds = kitchen.teams.get(shiftType) || [];
 
-      // Update kitchen teams
-      const currentTeam = kitchen.teams.get(shiftType) || [];
-      if (!currentTeam.includes(user._id)) {
-        currentTeam.push(user._id);
-        kitchen.teams.set(shiftType, currentTeam);
-        await kitchen.save({ session });
+      // Users to remove (currently assigned but not in new userIds)
+      const usersToUnset = currentUserIds.filter(
+        (id) => !userIds.includes(id.toString())
+      );
+
+      // Users to add (newly assigned)
+      const usersToSet = userIds.filter(
+        (id) => !currentUserIds.map((id) => id.toString()).includes(id)
+      );
+
+      // Remove kitchenId from users being unassigned
+      if (usersToUnset.length > 0) {
+        await User.updateMany(
+          { _id: { $in: usersToUnset } },
+          { $unset: { kitchenId: '' } },
+          { session }
+        );
       }
+
+      // Set kitchenId for users being assigned
+      if (usersToSet.length > 0) {
+        await User.updateMany(
+          { _id: { $in: usersToSet } },
+          { kitchenId: kitchen._id },
+          { session }
+        );
+      }
+
+      // Update kitchen teams for the shift
+      const updatedTeam = userIds.map((id) =>new mongoose.Types.ObjectId(id));
+      kitchen.teams.set(shiftType, updatedTeam);
+
+      await kitchen.save({ session });
 
       await session.commitTransaction();
       session.endSession();
 
-      res.json({ message: 'User assigned to kitchen shift successfully' });
+      res.json({ message: 'Users assigned to kitchen shift successfully' });
     } catch (error) {
       await session.abortTransaction();
       session.endSession();

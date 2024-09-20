@@ -132,24 +132,31 @@ export const deleteShop = async (req, res, next) => {
   }
 };
 
-// Assign a user to a shop shift (Admin only)
-export const assignUserToShopShift = async (req, res, next) => {
+// Assign a users to a shop shift (Admin only)
+export const assignUsersToShopShift = async (req, res, next) => {
   try {
     const { shopId } = req.params;
-    const { userId, shiftType } = req.body;
+    const { userIds, shiftType } = req.body;
+
+    // Validate request data
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
 
     // Validate shift type
     if (!Object.values(ShiftType).includes(shiftType)) {
       return res.status(400).json({ message: 'Invalid shift type' });
     }
 
-    const [user, shop] = await Promise.all([
-      User.findById(userId).exec(),
-      Shop.findById(shopId).exec(),
-    ]);
+    // Ensure userIds is an array
+    if (!Array.isArray(userIds)) {
+      return res.status(400).json({ message: 'userIds must be an array' });
+    }
 
-    if (!user || !shop) {
-      return res.status(404).json({ message: 'User or Shop not found' });
+    const shop = await Shop.findById(shopId).exec();
+    if (!shop) {
+      return res.status(404).json({ message: 'Shop not found' });
     }
 
     // Start a session for transaction
@@ -157,22 +164,47 @@ export const assignUserToShopShift = async (req, res, next) => {
     session.startTransaction();
 
     try {
-      // Assign user to shop
-      user.shopId = shop._id;
-      await user.save({ session });
+      // Get current users assigned to this shift
+      const currentUserIds = shop.teams.get(shiftType) || [];
 
-      // Update shop teams
-      const currentTeam = shop.teams.get(shiftType) || [];
-      if (!currentTeam.includes(user._id)) {
-        currentTeam.push(user._id);
-        shop.teams.set(shiftType, currentTeam);
-        await shop.save({ session });
+      // Users to remove (currently assigned but not in new userIds)
+      const usersToUnset = currentUserIds.filter(
+        (id) => !userIds.includes(id.toString())
+      );
+
+      // Users to add (newly assigned)
+      const usersToSet = userIds.filter(
+        (id) => !currentUserIds.map((id) => id.toString()).includes(id)
+      );
+
+      // Remove shopId from users being unassigned
+      if (usersToUnset.length > 0) {
+        await User.updateMany(
+          { _id: { $in: usersToUnset } },
+          { $unset: { shopId: '' } },
+          { session }
+        );
       }
+
+      // Set shopId for users being assigned
+      if (usersToSet.length > 0) {
+        await User.updateMany(
+          { _id: { $in: usersToSet } },
+          { shopId: shop._id },
+          { session }
+        );
+      }
+
+      // Update shop teams for the shift
+      const updatedTeam = userIds.map((id) => mongoose.Types.ObjectId(id));
+      shop.teams.set(shiftType, updatedTeam);
+
+      await shop.save({ session });
 
       await session.commitTransaction();
       session.endSession();
 
-      res.json({ message: 'User assigned to shop shift successfully' });
+      res.json({ message: 'Users assigned to shop shift successfully' });
     } catch (error) {
       await session.abortTransaction();
       session.endSession();

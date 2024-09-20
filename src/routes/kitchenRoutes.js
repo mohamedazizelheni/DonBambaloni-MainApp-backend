@@ -8,7 +8,7 @@ import {
   getKitchenById,
   updateKitchen,
   deleteKitchen,
-  assignUserToKitchenShift,
+  assignUsersToKitchenShift,
 } from '../controllers/kitchenController.js';
 import { authenticateToken } from '../middlewares/authenticate.js';
 import { authorizeRole } from '../middlewares/authorize.js';
@@ -106,22 +106,28 @@ router.delete(
 );
 
 /**
- * @route   POST /api/kitchens/:kitchenId/assign-user
- * @desc    Assign user to kitchen shift (Admin only)
+ * @route   POST /api/kitchens/:kitchenId/assign-users
+ * @desc    Assign multiple users to a kitchen shift (Admin only)
  * @access  Private
  */
 router.post(
-  '/:kitchenId/assign-user',
+  '/:kitchenId/assign-users',
   authenticateToken,
   authorizeRole('Admin'),
   [
     param('kitchenId').isMongoId().withMessage('Invalid kitchen ID'),
-    body('userId').isMongoId().withMessage('Invalid user ID'),
+    body('userIds')
+      .isArray()
+      .withMessage('userIds must be an array'),
+    body('userIds.*')
+      .optional()
+      .isMongoId()
+      .withMessage('Invalid user ID in userIds'),
     body('shiftType')
       .isIn(Object.values(ShiftType))
       .withMessage('Invalid shift type'),
   ],
-  assignUserToKitchenShift
+  assignUsersToKitchenShift
 );
 
 export default router;

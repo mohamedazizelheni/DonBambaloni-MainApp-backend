@@ -19,12 +19,16 @@ const ShopSchema = new mongoose.Schema(
 // Index for text search on name and address
 ShopSchema.index({ name: 'text', address: 'text' });
 ShopSchema.pre('save', function (next) {
-    const validShiftTypes = Object.values(ShiftType);
-    for (let key of this.teams.keys()) {
-      if (!validShiftTypes.includes(key)) {
-        return next(new Error(`Invalid shift type: ${key}`));
-      }
+  const validShiftTypes = Object.values(ShiftType);
+
+  if (!this.teams) {
+      this.teams = new Map();
     }
-    next();
-  });
+  for (let key of this.teams.keys()) {
+    if (!validShiftTypes.includes(key)) {
+      return next(new Error(`Invalid shift type: ${key}`));
+    }
+  }
+  next();
+});
 export default mongoose.model('Shop', ShopSchema);

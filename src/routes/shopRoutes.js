@@ -11,7 +11,7 @@ import {
   getShopById,
   updateShop,
   deleteShop,
-  assignUserToShopShift,
+  assignUsersToShopShift,
 } from '../controllers/shopController.js';
 import { ShiftType } from '../utils/enums.js';
 
@@ -78,19 +78,29 @@ router.delete(
   deleteShop
 );
 
-// POST /api/shops/:shopId/assign-user - Assign user to shop shift (Admin only)
+/**
+ * @route   POST /api/shops/:shopId/assign-users
+ * @desc    Assign multiple users to a shop shift (Admin only)
+ * @access  Private
+ */
 router.post(
-  '/:shopId/assign-user',
+  '/:shopId/assign-users',
   authenticateToken,
   authorizeRole('Admin'),
   [
     param('shopId').isMongoId().withMessage('Invalid shop ID'),
-    body('userId').isMongoId().withMessage('Invalid user ID'),
+    body('userIds')
+      .isArray()
+      .withMessage('userIds must be an array'),
+    body('userIds.*')
+      .optional()
+      .isMongoId()
+      .withMessage('Invalid user ID in userIds'),
     body('shiftType')
       .isIn(Object.values(ShiftType))
       .withMessage('Invalid shift type'),
   ],
-  assignUserToShopShift
+  assignUsersToShopShift
 );
 
 export default router;
