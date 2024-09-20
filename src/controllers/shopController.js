@@ -3,8 +3,9 @@
 import Shop from '../models/Shop.js';
 import User from '../models/User.js';
 import mongoose from 'mongoose';
-import { ShiftType } from '../utils/enums.js';
+import { ShiftType, AvailabilityStatus, ActionType } from '../utils/enums.js';
 import { validationResult } from 'express-validator';
+import { sendAvailabilityNotification } from './notificationController.js';
 
 // Create a new shop (Admin only)
 export const createShop = async (req, res, next) => {
@@ -133,6 +134,7 @@ export const deleteShop = async (req, res, next) => {
 };
 
 // Assign a users to a shop shift (Admin only)
+
 export const assignUsersToShopShift = async (req, res, next) => {
   try {
     const { shopId } = req.params;
@@ -164,6 +166,41 @@ export const assignUsersToShopShift = async (req, res, next) => {
     session.startTransaction();
 
     try {
+ // Fetch all users to be assigned and check their availability
+ const users = await User.find({ _id: { $in: userIds } })
+ .session(session)
+ .exec();
+
+// Identify users not found
+const foundUserIds = users.map((user) => user._id.toString());
+const notFoundUserIds = userIds.filter((id) => !foundUserIds.includes(id));
+
+if (notFoundUserIds.length > 0) {
+ await session.abortTransaction();
+ session.endSession();
+ return res.status(404).json({
+   message: `Users not found: ${notFoundUserIds.join(', ')}`,
+ });
+}
+
+// Identify unavailable users
+const unavailableUsers = users.filter(
+ (user) => !user.computedIsAvailable
+);
+
+if (unavailableUsers.length > 0) {
+ // Option 1: Prevent assignment and inform admin
+ await session.abortTransaction();
+ session.endSession();
+ return res.status(400).json({
+   message: 'Some users are unavailable and cannot be assigned.',
+   unavailableUsers: unavailableUsers.map((user) => ({
+     userId: user._id,
+     username: user.username,
+     email: user.email,
+   })),
+ });
+}
       // Get current users assigned to this shift
       const currentUserIds = shop.teams.get(shiftType) || [];
 
@@ -177,26 +214,52 @@ export const assignUsersToShopShift = async (req, res, next) => {
         (id) => !currentUserIds.map((id) => id.toString()).includes(id)
       );
 
-      // Remove shopId from users being unassigned
+      // Remove shopId and update availability for users being unassigned
       if (usersToUnset.length > 0) {
-        await User.updateMany(
-          { _id: { $in: usersToUnset } },
-          { $unset: { shopId: '' } },
-          { session }
-        );
+        const usersUnassigned = await User.find({ _id: { $in: usersToUnset } }).session(session).exec();
+
+        for (const user of usersUnassigned) {
+          user.shopId = undefined;
+          user.availabilityHistory.push({
+            date: new Date(),
+            status: user.computedIsAvailable ? AvailabilityStatus.AVAILABLE : AvailabilityStatus.UNAVAILABLE,
+            reason: 'Unassigned from shop shift',
+          });
+          user.history.push({
+            action: ActionType.UNASSIGNED_FROM_SHOP,
+            details: { shopId: shop._id },
+          });
+          await user.save({ session });
+
+          // Send notification
+          await sendAvailabilityNotification(user,false, 'Unassigned from shop shift', 'Assignment', session);
+        }
       }
 
-      // Set shopId for users being assigned
+      // Assign shopId and update availability for users being assigned
       if (usersToSet.length > 0) {
-        await User.updateMany(
-          { _id: { $in: usersToSet } },
-          { shopId: shop._id },
-          { session }
-        );
+        const usersAssigned = await User.find({ _id: { $in: usersToSet } }).session(session).exec();
+
+        for (const user of usersAssigned) {
+          user.shopId = shop._id;
+          user.availabilityHistory.push({
+            date: new Date(),
+            status: AvailabilityStatus.UNAVAILABLE,
+            reason: 'Assigned to shop shift',
+          });
+          user.history.push({
+            action: ActionType.ASSIGNED_TO_SHOP,
+            details: { shopId: shop._id },
+          });
+          await user.save({ session });
+
+          // Send notification
+          await sendAvailabilityNotification(user, true, 'Assigned to shop shift', 'Assignment', session);
+        }
       }
 
       // Update shop teams for the shift
-      const updatedTeam = userIds.map((id) => mongoose.Types.ObjectId(id));
+      const updatedTeam = userIds.map((id) =>new mongoose.Types.ObjectId(id));
       shop.teams.set(shiftType, updatedTeam);
 
       await shop.save({ session });
@@ -214,3 +277,4 @@ export const assignUsersToShopShift = async (req, res, next) => {
     next(error);
   }
 };
+

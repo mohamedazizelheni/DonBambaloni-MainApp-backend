@@ -30,6 +30,7 @@ const UserSchema = new mongoose.Schema(
     role: { type: String, enum: Object.values(Role), required: true, index: true },
     image: { type: String },
     isAvailable: { type: Boolean, default: true, index: true },
+    manualAvailability: { type: String, enum: Object.values(AvailabilityStatus), default: null },
     visaStatus: { type: String },
     visaExpiryDate: { type: Date, index: true },
     nationality: { type: String },
@@ -60,6 +61,27 @@ UserSchema.pre('save', async function (next) {
 UserSchema.methods.comparePassword = function (candidatePassword) {
   return compare(candidatePassword, this.password);
 };
+
+// Virtual property to compute overall availability
+UserSchema.virtual('computedIsAvailable').get(function () {
+  // If manualAvailability is set to 'Unavailable', the user is unavailable
+  if (this.manualAvailability === AvailabilityStatus.UNAVAILABLE) {
+    return false;
+  }
+  // If the user is assigned to a kitchen or shop, they are unavailable
+  if (this.kitchenId || this.shopId) {
+    return false;
+  }
+  // Otherwise, the user is available
+  return true;
+});
+
+// Update isAvailable before saving
+UserSchema.pre('save', function (next) {
+  this.isAvailable = this.computedIsAvailable;
+  next();
+});
+
 
 // Text index for search functionality
 UserSchema.index({ username: 'text', email: 'text', nationality: 'text' });

@@ -1,8 +1,9 @@
 import Kitchen from '../models/Kitchen.js';
 import User from '../models/User.js';
 import mongoose from 'mongoose';
-import { ShiftType } from '../utils/enums.js';
+import { ShiftType, AvailabilityStatus, ActionType } from '../utils/enums.js';
 import { validationResult } from 'express-validator';
+import { sendAvailabilityNotification } from './notificationController.js';
 
 // Create a new kitchen (Admin only)
 export const createKitchen = async (req, res, next) => {
@@ -131,6 +132,7 @@ export const deleteKitchen = async (req, res, next) => {
 };
 
 // Assign a user to a kitchen shift (Admin only)
+
 export const assignUsersToKitchenShift = async (req, res, next) => {
   try {
     const { kitchenId } = req.params;
@@ -162,6 +164,41 @@ export const assignUsersToKitchenShift = async (req, res, next) => {
     session.startTransaction();
 
     try {
+       // Fetch all users to be assigned and check their availability
+       const users = await User.find({ _id: { $in: userIds } })
+       .session(session)
+       .exec();
+
+     // Identify users not found
+     const foundUserIds = users.map((user) => user._id.toString());
+     const notFoundUserIds = userIds.filter((id) => !foundUserIds.includes(id));
+
+     if (notFoundUserIds.length > 0) {
+       await session.abortTransaction();
+       session.endSession();
+       return res.status(404).json({
+         message: `Users not found: ${notFoundUserIds.join(', ')}`,
+       });
+     }
+
+     // Identify unavailable users
+     const unavailableUsers = users.filter(
+       (user) => !user.computedIsAvailable
+     );
+
+     if (unavailableUsers.length > 0) {
+       // Option 1: Prevent assignment and inform admin
+       await session.abortTransaction();
+       session.endSession();
+       return res.status(400).json({
+         message: 'Some users are unavailable and cannot be assigned.',
+         unavailableUsers: unavailableUsers.map((user) => ({
+           userId: user._id,
+           username: user.username,
+           email: user.email,
+         })),
+       });
+     }
       // Get current users assigned to this shift
       const currentUserIds = kitchen.teams.get(shiftType) || [];
 
@@ -175,22 +212,48 @@ export const assignUsersToKitchenShift = async (req, res, next) => {
         (id) => !currentUserIds.map((id) => id.toString()).includes(id)
       );
 
-      // Remove kitchenId from users being unassigned
+      // Remove kitchenId and update availability for users being unassigned
       if (usersToUnset.length > 0) {
-        await User.updateMany(
-          { _id: { $in: usersToUnset } },
-          { $unset: { kitchenId: '' } },
-          { session }
-        );
+        const usersUnassigned = await User.find({ _id: { $in: usersToUnset } }).session(session).exec();
+
+        for (const user of usersUnassigned) {
+          user.kitchenId = undefined;
+          user.availabilityHistory.push({
+            date: new Date(),
+            status: user.computedIsAvailable ? AvailabilityStatus.AVAILABLE : AvailabilityStatus.UNAVAILABLE,
+            reason: 'Unassigned from kitchen shift',
+          });
+          user.history.push({
+            action: ActionType.UNASSIGNED_FROM_KITCHEN,
+            details: { kitchenId: kitchen._id },
+          });
+          await user.save({ session });
+
+          // Send notification
+          await sendAvailabilityNotification(user, false, 'Unassigned from kitchen shift', 'Assignment', session);
+        }
       }
 
-      // Set kitchenId for users being assigned
+      // Assign kitchenId and update availability for users being assigned
       if (usersToSet.length > 0) {
-        await User.updateMany(
-          { _id: { $in: usersToSet } },
-          { kitchenId: kitchen._id },
-          { session }
-        );
+        const usersAssigned = await User.find({ _id: { $in: usersToSet } }).session(session).exec();
+
+        for (const user of usersAssigned) {
+          user.kitchenId = kitchen._id;
+          user.availabilityHistory.push({
+            date: new Date(),
+            status: AvailabilityStatus.UNAVAILABLE,
+            reason: 'Assigned to kitchen shift',
+          });
+          user.history.push({
+            action: ActionType.ASSIGNED_TO_KITCHEN,
+            details: { kitchenId: kitchen._id },
+          });
+          await user.save({ session });
+
+          // Send notification
+          await sendAvailabilityNotification(user, true, 'Assigned to kitchen shift', 'Assignment', session);
+        }
       }
 
       // Update kitchen teams for the shift
@@ -212,3 +275,4 @@ export const assignUsersToKitchenShift = async (req, res, next) => {
     next(error);
   }
 };
+

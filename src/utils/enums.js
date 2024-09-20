@@ -14,9 +14,12 @@ export const Role = Object.freeze({
   
   export const ActionType = Object.freeze({
     ASSIGNED_TO_KITCHEN: 'AssignedToKitchen',
+    UNASSIGNED_FROM_KITCHEN: 'UnassignedFromKitchen',
     ASSIGNED_TO_SHOP: 'AssignedToShop',
+    UNASSIGNED_FROM_SHOP: 'UnassignedFromShop',
     AVAILABILITY_UPDATED: 'AvailabilityUpdated',
   });
+  
   
   export const ShiftType = Object.freeze({
     MORNING: 'Morning',

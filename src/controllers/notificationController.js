@@ -71,3 +71,29 @@ export const createNotification = async (req, res, next) => {
     next(err);
   }
 };
+
+export async function sendAvailabilityNotification(user, isAvailable, reason, actionType, session) {
+  let actionDescription = '';
+
+  switch (actionType) {
+    case 'Assignment':
+      actionDescription = `You have been ${isAvailable ? 'assigned to' : 'unassigned from'} a ${
+        user.kitchenId ? 'kitchen' : user.shopId ? 'shop' : 'role'
+      }.`;
+      break;
+    case 'ManualUpdate':
+      actionDescription = `Your availability has been ${isAvailable ? 'updated to Available' : 'updated to Unavailable'}.`;
+      break;
+    default:
+      actionDescription = `Your availability status has been updated.`;
+  }
+
+  const notificationMessage = `${actionDescription} Reason: ${reason || 'No specific reason provided.'}`;
+
+  const notification = new Notification({
+    userId: user._id,
+    message: notificationMessage,
+  });
+
+  await notification.save({ session });
+}

@@ -5,6 +5,7 @@ import {
   getUserProfile,
   updateUserProfile,
   deleteUser,
+  updateUserAvailability,
 } from '../controllers/userController.js';
 import { authenticateToken } from '../middlewares/authenticate.js';
 import { authorizeRole } from '../middlewares/authorize.js';
@@ -61,6 +62,23 @@ router.delete(
   authorizeRole('Admin'),
   [param('userId').isMongoId().withMessage('Invalid user ID')],
   deleteUser
+);
+
+/**
+ * @route   PUT /api/users/:userId/availability
+ * @desc    Update user availability (Admin only)
+ * @access  Private
+ */
+router.put(
+  '/:userId/availability',
+  authenticateToken,
+  authorizeRole('Admin'),
+  [
+    param('userId').isMongoId().withMessage('Invalid user ID'),
+    body('isAvailable').isBoolean().withMessage('isAvailable must be a boolean'),
+    body('reason').optional().trim().notEmpty().withMessage('Reason cannot be empty'),
+  ],
+  updateUserAvailability
 );
 
 export default router;
