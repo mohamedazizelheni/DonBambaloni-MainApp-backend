@@ -1,5 +1,3 @@
-// routes/shops.js
-
 import express from 'express';
 import { authenticateToken } from '../middlewares/authenticate.js';
 import { authorizeRole } from '../middlewares/authorize.js';
@@ -31,7 +29,6 @@ router.post(
     body('operatingShifts.*')
       .isIn(Object.values(ShiftType))
       .withMessage('Invalid shift type'),
-    // Additional validations as needed
   ],
   createShop
 );
@@ -64,7 +61,6 @@ router.put(
       .optional()
       .isIn(Object.values(ShiftType))
       .withMessage('Invalid shift type'),
-    // Additional validations as needed
   ],
   updateShop
 );

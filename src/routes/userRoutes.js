@@ -24,6 +24,7 @@ router.get(
   [
     query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
     query('limit').optional().isInt({ min: 1 }).withMessage('Limit must be a positive integer'),
+    query('search').optional().isString().withMessage('Search must be a string'),
   ],
   getAllUsers
 );
@@ -46,7 +47,6 @@ router.put(
   [
     body('email').optional().isEmail().withMessage('Valid email is required').normalizeEmail(),
     body('username').optional().trim().notEmpty().withMessage('Username cannot be empty'),
-    // Add additional validations as needed
   ],
   updateUserProfile
 );

@@ -1,5 +1,3 @@
-// routes/kitchens.js
-
 import express from 'express';
 import { body, param, query } from 'express-validator';
 import {
@@ -34,7 +32,6 @@ router.post(
     body('operatingShifts.*')
       .isIn(Object.values(ShiftType))
       .withMessage('Invalid shift type'),
-    // Add additional validations as needed
   ],
   createKitchen
 );
@@ -87,7 +84,6 @@ router.put(
       .optional()
       .isIn(Object.values(ShiftType))
       .withMessage('Invalid shift type'),
-    // Add additional validations as needed
   ],
   updateKitchen
 );

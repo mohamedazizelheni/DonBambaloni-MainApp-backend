@@ -7,21 +7,37 @@ import { sendAvailabilityNotification } from './notificationController.js';
 // Get all users (Admin only) with pagination and lean queries
 export const getAllUsers = async (req, res, next) => {
   try {
-    // Pagination parameters
     const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 20;
+    const limit = parseInt(req.query.limit, 10) || 10;
     const skip = (page - 1) * limit;
 
-    // Query users with projection and lean
-    const users = await User.find()
+    const search = req.query.search || '';
+    const role = req.query.role || '';
+    const availability = req.query.availability || '';
+    const minSalary = parseFloat(req.query.minSalary) || 0;
+    const maxSalary = parseFloat(req.query.maxSalary) || Number.MAX_SAFE_INTEGER;
+
+    // Build query with search term, role, availability, and salary range
+    const query = {
+      ...(search && {
+        $or: [
+          { username: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } },
+        ],
+      }),
+      ...(role && { role }),
+      ...(availability && { isAvailable: availability === 'Available' }),
+      salary: { $gte: minSalary, $lte: maxSalary },
+    };
+
+    const users = await User.find(query)
       .select('-password -__v')
       .skip(skip)
       .limit(limit)
       .lean()
       .exec();
 
-    // Get total count for pagination
-    const totalUsers = await User.countDocuments();
+    const totalUsers = await User.countDocuments(query);
 
     res.json({
       users,

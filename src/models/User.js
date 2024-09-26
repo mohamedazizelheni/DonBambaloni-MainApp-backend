@@ -6,7 +6,7 @@ import { Role, AvailabilityStatus, ActionType } from '../utils/enums.js';
 const SalaryRecordSchema = new mongoose.Schema({
   date: { type: Date, required: true },
   amount: { type: Number, required: true },
-  status: { type: String, default: 'Pending' }, // e.g., Paid, Pending
+  status: { type: String, default: 'Pending' }, // Paid, Pending
   notes: { type: String },
 });
 
@@ -64,6 +64,7 @@ UserSchema.methods.comparePassword = function (candidatePassword) {
 
 // Virtual property to compute overall availability
 UserSchema.virtual('computedIsAvailable').get(function () {
+  console.log('hello computed')
   // If manualAvailability is set to 'Unavailable', the user is unavailable
   if (this.manualAvailability === AvailabilityStatus.UNAVAILABLE) {
     return false;

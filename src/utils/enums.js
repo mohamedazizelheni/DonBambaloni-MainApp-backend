@@ -4,7 +4,7 @@ export const Role = Object.freeze({
     CASHIER: 'Cashier',
     CLEANER: 'Cleaner',
     TRAINEE_CHEF: 'TraineeChef',
-    // Add other roles as needed
+    DRIVER: 'Driver',
   });
   
   export const AvailabilityStatus = Object.freeze({

@@ -1,6 +1,6 @@
 import express from 'express';
 import { body } from 'express-validator';
-import { register, login, logout } from '../controllers/authController.js';
+import { register, login, logout, getMe, refreshToken } from '../controllers/authController.js';
 import { authenticateToken } from '../middlewares/authenticate.js';
 
 const router = express.Router();
@@ -24,7 +24,6 @@ router.post(
       .withMessage('Password must be at least 6 characters'),
     body('role').notEmpty().withMessage('Role is required'),
     body('salary').isNumeric().withMessage('Salary must be a number'),
-    // Add additional validations as needed
   ],
   register
 );
@@ -49,5 +48,14 @@ router.post(
  * @access  Private
  */
 router.post('/logout', authenticateToken, logout);
+
+
+/**
+ * @route   GET /api/auth/me
+ * @desc    Get authenticated user's profile
+ * @access  Private
+ */
+router.get('/me', authenticateToken, getMe);
+router.post('/refresh-token', refreshToken);
 
 export default router;
