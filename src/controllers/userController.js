@@ -3,6 +3,22 @@ import mongoose from 'mongoose';
 import { AvailabilityStatus, ActionType } from '../utils/enums.js';
 import { validationResult } from 'express-validator';
 import { sendAvailabilityNotification } from './notificationController.js';
+import multer from 'multer';
+import path from 'path';
+
+// Configure Multer storage
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/'); // the upload directory
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  },
+});
+
+// Initialize upload middleware
+const upload = multer({ storage });
 
 // Get all users (Admin only) with pagination and lean queries
 export const getAllUsers = async (req, res, next) => {
@@ -67,24 +83,39 @@ export const getUserProfile = async (req, res, next) => {
 };
 
 // Update user profile
-export const updateUserProfile = async (req, res, next) => {
-  try {
-    const updates = req.body;
-    delete updates.password; // Prevent password updates here
+export const updateUserProfile = [
+  upload.single('image'), // Multer middleware to handle single file upload
+  async (req, res, next) => {
+    try {
+      const updates = req.body;
 
-    const user = await User.findByIdAndUpdate(req.user.userId, updates, {
-      new: true,
-      select: '-password -__v',
-      lean: true,
-    });
+      // Handle password update
+      if (updates.password) {
+        const salt = await genSalt(10);
+        updates.password = await hash(updates.password, salt);
+      } else {
+        delete updates.password;
+      }
 
-    if (!user) return res.status(404).json({ message: 'User not found' });
+      // Handle image update
+      if (req.file) {
+        updates.image = req.file.path; // Store the file path in the database
+      }
 
-    res.json({ message: 'Profile updated successfully', user });
-  } catch (err) {
-    next(err);
-  }
-};
+      const user = await User.findByIdAndUpdate(req.user.userId, updates, {
+        new: true,
+        select: '-password -__v',
+        lean: true,
+      });
+
+      if (!user) return res.status(404).json({ message: 'User not found' });
+
+      res.json({ message: 'Profile updated successfully' });
+    } catch (err) {
+      next(err);
+    }
+  },
+];
 
 // Delete user (Admin only)
 export const deleteUser = async (req, res, next) => {

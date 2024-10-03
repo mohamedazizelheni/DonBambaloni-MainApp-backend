@@ -7,6 +7,9 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser'; 
+import { fileURLToPath } from 'url';
+import path from 'path';
+import { dirname } from 'path'
 
 // Import routes
 import authRoutes from './src/routes/auth.js'
@@ -16,6 +19,8 @@ import shopRoutes from './src/routes/shopRoutes.js';
 import notificationRoutes from './src/routes/notificationsRoutes.js';
 
 const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Middleware
 app.use(helmet());
@@ -24,6 +29,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser()); // Parse cookies
 app.use(morgan('dev'));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Database connection
 mongoose.connect(process.env.MONGODB_URI);

@@ -15,7 +15,7 @@ const generateRefreshToken = async (user) => {
     token: refreshToken,
     user: user._id,
     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days expiry
-  }).save();
+  }).save();  
 
   return refreshToken;
 };
