@@ -1,10 +1,15 @@
 import User from '../models/User.js';
+import AvailabilityHistory from '../models/AvailabilityHistory.js';
+import SalaryRecord from '../models/SalaryRecord.js';
+import UserHistory from '../models/UserHistory.js';
 import mongoose from 'mongoose';
 import { AvailabilityStatus, ActionType } from '../utils/enums.js';
 import { validationResult } from 'express-validator';
 import { sendAvailabilityNotification } from './notificationController.js';
 import multer from 'multer';
 import path from 'path';
+import Shop from '../models/Shop.js';
+import Kitchen from '../models/Kitchen.js';
 
 // Configure Multer storage
 const storage = multer.diskStorage({
@@ -86,7 +91,8 @@ export const getUserProfile = async (req, res, next) => {
 export const updateUserProfile = [
   upload.single('image'), // Multer middleware to handle single file upload
   async (req, res, next) => {
-    try {
+    try 
+    {
       const updates = req.body;
 
       // Handle password update
@@ -188,21 +194,28 @@ export const updateUserAvailability = async (req, res, next) => {
       user.manualAvailability = isAvailable ? null : AvailabilityStatus.UNAVAILABLE;
 
       // Add entry to availabilityHistory
-      user.availabilityHistory.push({
+      const availabilityRecord = new AvailabilityHistory({
+        user: user._id,
         date: new Date(),
         status: user.computedIsAvailable ? AvailabilityStatus.AVAILABLE : AvailabilityStatus.UNAVAILABLE,
         reason: reason || 'Status updated by admin',
       });
+      await availabilityRecord.save({ session });
 
-      // Add entry to history
-      user.history.push({
+      // Add entry to user history
+      const userHistoryRecord = new UserHistory({
+        user: user._id,
         action: ActionType.AVAILABILITY_UPDATED,
         details: {
           status: user.computedIsAvailable ? 'Available' : 'Unavailable',
           reason: reason || 'Status updated by admin',
         },
       });
+      await userHistoryRecord.save({ session });
 
+      user.availabilityHistory.push(availabilityRecord._id);
+      user.history.push(userHistoryRecord._id);
+      
       await user.save({ session });
 
       // Handle rescheduling or reassignment if applicable
@@ -268,3 +281,70 @@ async function handleUserUnavailability(user, session) {
   // Update user document
   await user.save({ session });
 }
+
+// Fetch assigned and available users for a shop or kitchen
+export const getAssignedAndAvailableUsers = async (req, res, next) => {
+  try {
+    const { entityId, entityType } = req.params;
+    const isShop = entityType === 'shops';
+    const isKitchen = entityType === 'kitchens';
+
+    if (!isShop && !isKitchen) {
+      return res.status(400).json({ message: 'Invalid entity type' });
+    }
+
+    // Fetch the entity with teams populated
+    const entity = isShop
+      ? await Shop.findById(entityId).lean()
+      : await Kitchen.findById(entityId).lean();
+
+    if (!entity) {
+      return res.status(404).json({ message: `${entityType} not found` });
+    }
+
+    // Extract assigned user IDs by shift
+    const assignedUsersByShift = {};
+    const assignedUserIds = [];
+
+    // Since teams is a Map, we need to handle it appropriately
+    const teams = entity.teams || {};
+    for (const shift of Object.keys(teams)) {
+      const userIds = teams[shift] || [];
+      assignedUsersByShift[shift] = userIds;
+      assignedUserIds.push(...userIds);
+    }
+
+    // Fetch assigned users' details
+    const assignedUsers = await User.find({ _id: { $in: assignedUserIds } })
+    .select('_id username role')
+      .lean();
+
+    // Map user IDs to user details for quick lookup
+    const userMap = {};
+    assignedUsers.forEach((user) => {
+      userMap[user._id.toString()] = user;
+    });
+
+    // Replace user IDs with user details in assignedUsersByShift
+    for (const shift of Object.keys(assignedUsersByShift)) {
+      assignedUsersByShift[shift] = assignedUsersByShift[shift].map((userId) => userMap[userId.toString()]);
+    }
+
+    // Fetch available users (excluding assigned users)
+    const availableUsers = await User.find({
+      role: { $nin: ['Admin', 'Driver'] }, // Exclude Admins and Drivers
+      isAvailable: true,
+      _id: { $nin: assignedUserIds },
+    })
+    .select('_id username role')
+      .lean();
+
+    // Return both assigned users by shift and available users
+    res.status(200).json({
+      assignedUsers: assignedUsersByShift,
+      availableUsers,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

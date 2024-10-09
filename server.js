@@ -17,6 +17,7 @@ import userRoutes from './src/routes/userRoutes.js';
 import kitchenRoutes from './src/routes/kitchenRoutes.js';
 import shopRoutes from './src/routes/shopRoutes.js';
 import notificationRoutes from './src/routes/notificationsRoutes.js';
+import historyRoutes from './src/routes/historyRoutes.js';
 
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
@@ -46,6 +47,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/kitchens', kitchenRoutes);
 app.use('/api/shops', shopRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/history', historyRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

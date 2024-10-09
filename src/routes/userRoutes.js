@@ -6,6 +6,7 @@ import {
   updateUserProfile,
   deleteUser,
   updateUserAvailability,
+  getAssignedAndAvailableUsers,
 } from '../controllers/userController.js';
 import { authenticateToken } from '../middlewares/authenticate.js';
 import { authorizeRole } from '../middlewares/authorize.js';
@@ -81,4 +82,5 @@ router.put(
   updateUserAvailability
 );
 
+router.get('/assigned-available/:entityType/:entityId',authenticateToken, authorizeRole('Admin'),getAssignedAndAvailableUsers);
 export default router;

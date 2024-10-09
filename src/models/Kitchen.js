@@ -13,6 +13,7 @@ const KitchenSchema = new mongoose.Schema(
       default: {},
     },
     image: { type: String },
+    isDeleted: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

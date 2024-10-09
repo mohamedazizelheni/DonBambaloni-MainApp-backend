@@ -10,8 +10,11 @@ const ShopSchema = new mongoose.Schema(
     teams: {
       type: Map,
       of: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+      default: {},
     },
     image: { type: String },
+    isDeleted: { type: Boolean, default: false },
+
   },
   { timestamps: true }
 );

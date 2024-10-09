@@ -23,16 +23,6 @@ router.post(
   '/',
   authenticateToken,
   authorizeRole('Admin'),
-  [
-    body('name').trim().notEmpty().withMessage('Name is required'),
-    body('address').trim().notEmpty().withMessage('Address is required'),
-    body('operatingShifts')
-      .isArray({ min: 1 })
-      .withMessage('At least one operating shift is required'),
-    body('operatingShifts.*')
-      .isIn(Object.values(ShiftType))
-      .withMessage('Invalid shift type'),
-  ],
   createKitchen
 );
 
